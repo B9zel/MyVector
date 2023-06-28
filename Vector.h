@@ -3,92 +3,148 @@
 #include <initializer_list>
 #include <iostream>
 
+
+template<typename Vector>
+class BaseIterator 
+{
+public:
+	using ValueType = typename Vector::ValueType;
+	using PointerType = ValueType*;
+	using ReferenceType = ValueType&;
+public:
+
+	BaseIterator() : m_pointer(nullptr) { }
+	BaseIterator(PointerType ptr)
+	{
+		m_pointer = ptr;
+	}
+	BaseIterator(const ReferenceType it)
+	{
+		m_pointer = it.m_pointer; 
+	}
+
+	BaseIterator& operator++()
+	{
+		m_pointer++;
+		return *this; 
+	}
+	BaseIterator operator++(int stepForward)
+	{
+		BaseIterator it = *this;
+		m_pointer++;
+		return it;
+	}
+	BaseIterator& operator--()
+	{
+		m_pointer--; 
+		return *this;
+	}
+	BaseIterator operator--(int stepBack)
+	{
+		BaseIterator it = *this;
+		m_pointer--;
+		return it;
+	}
+
+	BaseIterator& operator+=(int step)
+	{
+		m_pointer += step; 
+		return *this;
+	}
+	ValueType& operator*() 
+	{ 
+		return *m_pointer; 
+	}
+	PointerType operator->() 
+	{
+		return m_pointer;
+	}
+
+	bool operator==(const BaseIterator& it)
+	{ 
+		return this->m_pointer == it.m_pointer; 
+	}
+	bool operator!=(const BaseIterator& it)
+	{
+		return !(this->operator==(it)); 
+	}
+
+private:
+
+	PointerType m_pointer;
+};
+
+
+
 template<typename T>
 class Vector
 {
 public:
+	using ValueType = T;
+	using PointType = ValueType*;
+	using ReferenceType = ValueType&;
+	using Iterator = BaseIterator<Vector<T>>;
+	using const_Iterator = BaseIterator<Vector<T const>>;
+public:
 
-	class Iterator;
 
 	Vector();
 	Vector(const size_t size);
-	Vector(const size_t size, const T value);
+	Vector(const size_t size, const ValueType value);
 	Vector(const Vector& other);
 	Vector(const std::initializer_list<T> listValues);
 	~Vector();
 
 
-	void push_back(T value);
+	void push_back(ValueType&& value);
+	void push_back(const ValueType& value);
 	void pop_back();
+	template<class... Args>
+	T& emplace_back(Args&&... args);
+
 	size_t size();
 	const size_t size() const;
 	size_t capacity();
 	const size_t capacity() const;
+
 	bool empty();
 	bool empty() const;
 	void clear();
+
 	void reserve(size_t space);
-	void insert(size_t index, T value);
-	
+	void insert(size_t index, ValueType value);
 	void erase(const size_t index);
 	void resize(const size_t Newsize);
-	void resize(const size_t Newsize, const T& val);
+	void resize(const size_t Newsize, const ReferenceType val);
+
 	T* data();
 	const T* data() const;
 	T& at(const size_t index);
 	const T& at(const size_t index) const;
-	Vector<T>::Iterator begin();
-	const Vector<T>::Iterator begin() const;
-	const T* cbegin() const;
-	T* end();
-	const T* end() const;
-	const T* cend() const;
+
+	Iterator begin();
+	const_Iterator begin() const;
+	const_Iterator cbegin() const;
+	Iterator end();
+	const_Iterator end() const;
+	const_Iterator cend() const;
 	void shrink_to_fit();
 
-
-	void print();
 
 	T& operator[](const size_t el);
 	const T& operator[](const size_t el) const;
 
 	Vector<T>& operator=(const Vector<T>& other);
 	Vector<T>& operator=(const std::initializer_list<T> listValue);
+	Vector<T>& operator=(Vector<T>&& other) noexcept;
 
 	bool operator==(const Vector<T>& other);
 	bool operator==(const Vector<T>& other) const;
 	bool operator!=(const Vector<T>& other);
 	bool operator!=(const Vector<T>& other) const;
 
-
-	
-	class Iterator
-	{
-		typedef T value_type;
-		typedef T* pointer;
-		typedef T& reference;
-	public:
-
-		Iterator() : m_pointer(nullptr) { }
-		Iterator(pointer ptr) { m_pointer = ptr; }
-		Iterator(Vector<T>::Iterator&& it) { m_pointer = it.m_pointer; }
-		Iterator& operator=(Vector<T>::Iterator* it) { m_pointer = it->m_pointer; return *this; }
-		
-		Iterator& operator++() { m_pointer++; return *this; }
-		value_type operator++(int stepForward) { value_type value = *m_pointer; m_pointer--; return value; }
-		Iterator& operator--() { m_pointer++; return *this; }
-		value_type operator--(int stepBack) { value_type value = *m_pointer; m_pointer--; return value; }
-		Iterator& operator+=(int step) { m_pointer += step; return *this; }
-		reference operator*() {	return *m_pointer;}
-		Iterator* operator->(){	return this;}
-
-		
-	private:
-		
-		pointer m_pointer;
-	};
-
 private:
-	T* m_arr;
+	PointType m_arr;
 	size_t m_size;
 	size_t m_capacity;
 };
@@ -97,7 +153,7 @@ template<typename T>
 inline Vector<T>::Vector() : m_arr(nullptr)
 {
 	this->m_size = 0;
-	this->m_capacity = 0;
+	reserve(2);
 }
 
 template<typename T>
@@ -109,11 +165,11 @@ Vector<T>::Vector(const size_t size)
 }
 
 template<typename T>
-inline Vector<T>::Vector(const size_t size, const T value)
+inline Vector<T>::Vector(const size_t size, const ValueType value)
 {
 	this->m_size = size;
 	this->m_capacity = size;
-	this->m_arr = new T[m_capacity];
+	this->m_arr = new ValueType[m_capacity];
 
 	for (int i = 0; i < m_size; i++)
 	{
@@ -127,7 +183,7 @@ inline Vector<T>::Vector(const Vector& other)
 	this->m_size = other.m_size;
 	this->m_capacity = other.m_capacity;
 
-	this->m_arr = new T[this->m_capacity];
+	this->m_arr = new ValueType[this->m_capacity];
 
 	for (size_t i = 0; i < m_size; i++)
 	{
@@ -141,7 +197,7 @@ Vector<T>::Vector(const std::initializer_list<T> listValues)
 	this->m_capacity = listValues.size();
 	this->m_size = m_capacity;
 
-	this->m_arr = new T[m_capacity];
+	this->m_arr = new ValueType[m_capacity];
 
 	int i = 0;
 	for (auto& el : listValues)
@@ -155,11 +211,23 @@ Vector<T>::Vector(const std::initializer_list<T> listValues)
 template<typename T>
 inline Vector<T>::~Vector()
 {
-	delete[] this->m_arr;
+	clear();
+	::operator delete(m_arr, m_capacity * sizeof(T));
 }
 
 template<typename T>
-inline void Vector<T>::push_back(T value)
+inline void Vector<T>::push_back(ValueType&& value)
+{
+	if (m_size >= m_capacity)
+	{
+		reserve(static_cast<size_t>(m_capacity == 0 ? 2 : m_capacity * 1.5));
+	}
+
+	new(&m_arr[m_size++]) T(std::move(value));
+}
+
+template<typename T>
+inline void Vector<T>::push_back(const ValueType& value)
 {
 	if (m_size >= m_capacity)
 	{
@@ -227,76 +295,76 @@ inline void Vector<T>::clear()
 template<typename T>
 inline void Vector<T>::reserve(size_t space)
 {
-	if (space <= this->m_capacity) return;
+	if (space <= this->m_capacity ) return;
 
-	T* newArr = nullptr;
-	try
-	{
-		newArr = new T[space];
-	}
-	catch (const std::exception& el )
-	{
-		std::cout << el.what() << std::endl;
-		abort();
-	}
+	PointType newArr = (T*)::operator new(space * sizeof(T));
 	
 	for (size_t i = 0; i < m_size; i++)
 	{
-		newArr[i] = m_arr[i];
+		//new(&newArr[i]) T(m_arr[i]);
+		new(&(*(newArr + i))) T(*(m_arr + i));
 	}
-	delete[] this->m_arr;
+	clear();
+	::operator delete(this->m_arr, m_capacity * sizeof(T));
 
 	this->m_arr = newArr;
 	this->m_capacity = space;
 }
 
 template<typename T>
-inline void Vector<T>::insert(size_t index, T value)
+inline void Vector<T>::insert(size_t index, ValueType value)
 {
-	if (index == m_size)
-	{
-		push_back(value);
-		return;
-	}
+#ifdef _DEBUG 
 	if (index > m_size)
 	{
 		std::cout << "Not valid index";
 		throw;
 	}
+#endif // DEBUG
+
+	if (index == m_size)
+	{
+		push_back(value);
+		return;
+	}
+	
 	if (m_size >= m_capacity)
 	{
 		reserve(m_capacity == 0 ? 2 : m_capacity * 1.5);
 	}
 	m_size++;
 
-	T l_value = m_arr[index];
+	ValueType l_value = m_arr[index];
 	for (size_t i = index; i < m_size; i++)
 	{
-		T l_timeValue = m_arr[i + 1];
+		ValueType l_nextValue = m_arr[i + 1];
 		m_arr[i + 1] = l_value;
-		l_value = l_timeValue;
+		l_value = l_nextValue;
 	}
 
 	m_arr[index] = value;
 }
 
+
 template<typename T>
 inline void Vector<T>::erase(const size_t index)
 {
+#ifdef _DEBUG
 	if (index >= m_size)
 	{
 		return;
 	}
+#endif
 	if (index == m_size - 1)
 	{
 		pop_back();
 	}
-	
-	for (size_t i = 0; i < m_size - 1; i++)
-	{
-		m_arr[index] = m_arr[index + 1];
-	}
+
 	m_size--;
+	for (size_t i = index; i < m_size; i++)
+	{
+		m_arr[i] = m_arr[i + 1];
+	}
 }
 
 template<typename T>
@@ -322,7 +390,7 @@ inline void Vector<T>::resize(const size_t Newsize)
 }
 
 template<typename T>
-inline void Vector<T>::resize(const size_t Newsize, const T& val)
+inline void Vector<T>::resize(const size_t Newsize, const ReferenceType val)
 {
 	if (Newsize > m_size)
 	{
@@ -371,34 +439,38 @@ inline typename Vector<T>::Iterator Vector<T>::begin()
 }
 
 template<typename T>
-inline const typename Vector<T>::Iterator Vector<T>::begin() const
+inline typename Vector<T>::const_Iterator Vector<T>::begin() const
 {
-	Vector<T>::Iterator it(m_arr);
+	Vector<T>::const_Iterator it(m_arr);
 	return it;
 }
 
 template<typename T>
-inline const T* Vector<T>::cbegin() const
+inline typename Vector<T>::const_Iterator Vector<T>::cbegin() const
 {
-	return m_arr;
+	Vector<T>::const_Iterator it(m_arr);
+	return it;
 }
 
 template<typename T>
-inline T* Vector<T>::end()
+inline typename Vector<T>::Iterator Vector<T>::end()
 {
-	return m_arr + m_size;
+	Vector<T>::Iterator it(m_arr + m_size);
+	return it;
 }
 
 template<typename T>
-inline const T* Vector<T>::end() const
+inline typename Vector<T>::const_Iterator Vector<T>::end() const
 {
-	return m_arr + m_size;
+	Vector<T>::const_Iterator it(m_arr + m_size);
+	return it;
 }
 
 template<typename T>
-inline const T* Vector<T>::cend() const
+inline typename Vector<T>::const_Iterator Vector<T>::cend() const
 {
-	return m_arr + m_size;
+	Vector<T>::const_Iterator it(m_arr + m_size);
+	return it;
 }
 
 template<typename T>
@@ -406,16 +478,17 @@ inline void Vector<T>::shrink_to_fit()
 {
 	if (m_capacity == m_size) return;
 
-	m_capacity = m_size;
-	T* Newspace = new T[m_capacity];
+	PointType Newspace = (T*)::operator new(m_size * sizeof(T));
 
 	for (size_t i = 0; i < m_size; i++)
 	{
-		Newspace[i] = m_arr[i];
+		Newspace[i] = std::move(m_arr[i]);
 	}
-	delete[] m_arr;
+	clear();
+	::operator delete(m_arr,m_capacity * sizeof(T));
 
 	m_arr = Newspace;
+	m_capacity = m_size;
 }
 
 template<typename T>
@@ -431,46 +504,43 @@ inline const T* Vector<T>::data() const
 }
 
 template<typename T>
-inline void Vector<T>::print()
-{
-	for (size_t i = 0; i < m_size; i++)
-	{
-		std::cout << m_arr[i] << " ";
-	}
-}
-
-template<typename T>
 inline T& Vector<T>::operator[](const size_t el)
 {
+#ifdef _DEBUG
 	if (el >= m_size)
 	{
 		abort();
 	}
+#endif // _DEBUG
+
 	return this->m_arr[el];
 }
 
 template<typename T>
 inline const T& Vector<T>::operator[](const size_t el) const
 {
+#ifdef _DEBUG
 	if (el >= m_size)
 	{
 		abort();
 	}
+#endif // _DEBUG
 	return this->m_arr[el];
 }
 
 template<typename T>
 inline Vector<T>& Vector<T>::operator=(const Vector<T>& other)
 {
-	if (this->m_arr != nullptr)
+	if (m_capacity < other.m_size)
 	{
-		delete[] this->m_arr;
+		clear();
+		::operator delete(m_arr, m_capacity * sizeof(T));
+
+		m_capacity = other.m_capacity;
+		m_arr = new T[m_capacity];
 	}
 
 	this->m_size = other.m_size;
-	this->m_capacity = other.m_capacity;
-
-	this->m_arr = new T[this->m_capacity];
 
 	for (size_t i = 0; i < m_size; i++)
 	{
@@ -485,13 +555,10 @@ inline Vector<T>& Vector<T>::operator=(const std::initializer_list<T> listValue)
 {
 	if (listValue.size() > m_capacity)
 	{
-		delete[] m_arr;
+		clear();
+		::operator delete(m_arr, m_capacity * sizeof(T));
 		m_capacity = listValue.size();
-		m_arr = new T[m_capacity];
-	}
-	else
-	{
-		this->clear();
+		m_arr = new ValueType[m_capacity];
 	}
 	m_size = listValue.size();
 
@@ -501,6 +568,15 @@ inline Vector<T>& Vector<T>::operator=(const std::initializer_list<T> listValue)
 		m_arr[i] = el;
 		i++;
 	}
+
+	return *this;
+}
+
+template<typename T>
+inline Vector<T>& Vector<T>::operator=(Vector<T>&& other) noexcept
+{
+	this->operator=(other);
+	other.clear();
 
 	return *this;
 }
@@ -539,4 +615,17 @@ template<typename T>
 inline bool Vector<T>::operator!=(const Vector<T>& other) const
 {
 	return !(this->operator==(other));
+}
+
+template<typename T>
+template<class ...Args>
+inline T& Vector<T>::emplace_back(Args && ...args)
+{
+	if (m_size >= m_capacity)
+	{
+		reserve(static_cast<size_t>(m_capacity == 0 ? 2 : m_capacity * 1.5));
+	}
+	new(&m_arr[m_size]) T(std::forward<Args>(args)...);
+
+	return m_arr[m_size++];
 }
