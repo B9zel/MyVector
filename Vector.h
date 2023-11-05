@@ -5,115 +5,20 @@
 
 
 
-//template<typename Vector>
-//struct BaseIterator
-//{
-//public:
-//	//using ValueType = typename ;
-//	using ValueType = typename Vector::ValueType;
-//	using PointerType = ValueType*;
-//	using ReferenceType = ValueType&;
-//	
-//
-//	PointerType _Pointer;
-//};
+#define _TryBegin try {
+#define _TryEnd }
 
+#define _CatchAll \
+		 catch (...) { 
 
-//template<typename Vector>
-//class VectorConstIterator// : public BaseIterator<Vector>
-//{
-//public:
-//	using ValueType =  typename Vector::ValueType;
-//	using PointerType = ValueType *;
-//	using ReferenceType = ValueType&;
-//
-//	VectorConstIterator() : _Pointer(nullptr)
-//	{
-//	}
-//	VectorConstIterator(PointerType conteiner) : _Pointer(conteiner)
-//	{
-//	}
-//	VectorConstIterator(VectorConstIterator<Vector>& conteiner)
-//	{
-//		_Pointer = conteiner._Pointer;
-//	}
-//	VectorConstIterator& operator++()
-//	{
-//		++_Pointer;
-//		return *this;
-//	}
-//	VectorConstIterator operator++(int)
-//	{
-//		VectorConstIterator it(*this);
-//		++_Pointer;
-//		return it;
-//	}
-//	VectorConstIterator& operator--()
-//	{
-//		--_Pointer;
-//		return *this;
-//	}
-//	VectorConstIterator operator--(int)
-//	{
-//		VectorConstIterator it(*this);
-//		--_Pointer;
-//		return it;
-//	}
-//
-//	VectorConstIterator& operator+=(size_t step)
-//	{
-//		_Pointer += step;
-//		return *this;
-//	}
-//	VectorConstIterator& operator-=(size_t step)
-//	{
-//		_Pointer -= step;
-//		return *this;
-//	}
-//	VectorConstIterator operator+(size_t step) const
-//	{
-//		VectorConstIterator it(*this);
-//		return it._Pointer += step;
-//	}
-//	VectorConstIterator operator-(size_t step) const
-//	{
-//		VectorConstIterator it(*this);
-//		return it._Pointer -= step;
-//	}
-//	const ReferenceType operator*() const
-//	{
-//		return *_Pointer;
-//	}
-//	const PointerType operator->() const
-//	{
-//		return _Pointer;
-//	}
-//	bool operator==(const VectorConstIterator& it) const
-//	{
-//		return _Pointer == it._Pointer;
-//	}
-//	bool operator!=(const VectorConstIterator& it) const
-//	{
-//		return _Pointer != it._Pointer;
-//	}
-//	/*const ReferenceType operator=(const VectorConstIterator& otherIT)
-//	{
-//		_Pointer = otherIT._Pointer;
-//	}*/
-//
-//	ReferenceType operator[](size_t offset)
-//	{
-//		return *(*this + offset);
-//	}
-//
-//public:
-//
-//	PointerType _Pointer;
-//};
+#define _CatchEnd }
+
+#define _CatchException  \
+		catch(const std::exception& excep) {
 
 
 template<typename Vector>
-class VectorIterator //: public VectorConstIterator<Vector>
+class VectorIterator
 {
 public:
 	using ValueType = typename Vector::ValueType;
@@ -124,10 +29,10 @@ public:
 	VectorIterator()// : VectorConstIterator()
 	{
 	}
-	VectorIterator(PointerType conteiner) : _Pointer(conteiner)// VectorConstIterator<Vector>(conteiner)
+	VectorIterator(PointerType conteiner) : _Pointer(conteiner)
 	{
 	}
-	VectorIterator(VectorIterator<Vector>& conteiner)// : VectorConstIterator<Vector>(conteiner)
+	VectorIterator(VectorIterator<Vector>& conteiner)
 	{
 		_Pointer = (conteiner._Pointer);
 	}
@@ -197,9 +102,35 @@ public:
 };
 
 
-
-
 template<typename T>
+class Allocator
+{
+public:
+	
+	static_assert(!std::is_const_v<T>, "It is forbidden to store a const element");
+	static_assert(!std::is_function_v<T>, "It is forbidden to store a function element");
+	static_assert(!std::is_reference_v<T>, "It is forbidden to store a reference element");
+
+	typedef T ValueType;
+
+	ValueType* allocate(const size_t Count)
+	{
+		try
+		{
+			return static_cast<T*>(::operator new(Count * sizeof(T)));
+		} catch (...)
+		{
+			throw std::exception("Can't allocate memory");
+		}
+	}
+	void deallocate(T* const Ptr, const size_t Count)
+	{
+		::operator delete(Ptr, Count * sizeof(T));
+	}
+};
+
+
+template<typename T,typename Alloc = Allocator<T>>
 class Vector
 {
 public:
@@ -211,12 +142,15 @@ public:
 public:
 
 
-	Vector();
-	Vector(const size_t size);
+	Vector() noexcept(std::is_nothrow_default_constructible_v<T>);
+	explicit Vector(const Alloc& alloc);
+	explicit Vector(const size_t space,const Alloc& Allocator = Alloc());
+	template<typename Item>
+	Vector(const Item begin,const Item end, const Alloc& Allocator = Alloc());
 	Vector(const size_t size, const ValueType value);
 	Vector(const Vector& other);
 	Vector(Vector&& other);
-	Vector(const std::initializer_list<T> listValues);
+	Vector(std::initializer_list<T> listValues,const Alloc& Allocator = Alloc());
 	~Vector();
 
 
@@ -227,6 +161,11 @@ public:
 	T& emplace_back(Args&&... args);
 	template<class... Args>
 	size_t emplace(const size_t index, Args&&... val);
+
+	template<typename Item>
+	void assign(const Item begin, const Item end);
+	void assign(const std::initializer_list<T> listValue);
+	void assign(size_t Newsize,const T& value);
 	
 
 	size_t size();
@@ -244,7 +183,7 @@ public:
 	size_t insert(size_t index, ValueType&& value);
 	void erase(const size_t index);
 	void resize(const size_t Newsize);
-	void resize(const size_t Newsize, const ReferenceType val);
+	void resize(const size_t Newsize, const T& val);
 
 	PointType data();
 	const T* data() const;
@@ -261,192 +200,596 @@ public:
 	void shrink_to_fit();
 	ValueType& front() const;
 	ValueType& back() const;
-	void swap(Vector<T>& other);
+	void swap(Vector& other);
 
 	T& operator[](const size_t el);
 	const T& operator[](const size_t el) const;
 
-	Vector<T>& operator=(const Vector<T>& other);
-	Vector<T>& operator=(const std::initializer_list<T> listValue);
-	Vector<T>& operator=(Vector<T>&& other) noexcept;
+	Vector& operator=(const Vector& other);
+	Vector& operator=(const std::initializer_list<T> listValue);
+	Vector& operator=(Vector&& other) noexcept;
 
-	bool operator==(const Vector<T>& other);
-	bool operator==(const Vector<T>& other) const;
-	bool operator!=(const Vector<T>& other);
-	bool operator!=(const Vector<T>& other) const;
-
+	//bool operator<(const Vector& other);
+	bool operator==(const Vector& other);
+	bool operator==(const Vector& other) const;
+	bool operator!=(const Vector& other);
+	bool operator!=(const Vector& other) const;
+	
 private:
 	
 	size_t m_size;
 	size_t m_capacity;
+	Alloc Allocat;
 	PointType m_arr;
+
+private:
+
+	inline size_t _ChangeGrowth(size_t capacity)
+	{
+		const size_t Newcapacity = capacity + capacity / 2;
+		if (Newcapacity < capacity)
+			return capacity;
+
+		return Newcapacity;
+	}
+
 };
 
-template<typename T>
-inline Vector<T>::Vector() : m_size{0}
-{
-	reserve(2);
-}
-
-template<typename T>
-Vector<T>::Vector(const size_t space) : m_size{0},m_capacity{space}, m_arr((T*)::operator new(m_capacity * sizeof(T)))
+template<typename T, typename Alloc>
+inline Vector<T,Alloc>::Vector() noexcept(std::is_nothrow_default_constructible_v<T>) : m_size{0}, m_capacity{0},m_arr{nullptr}
 {
 }
 
-template<typename T>
-inline Vector<T>::Vector(const size_t size, const ValueType value) : m_size{ size }, m_capacity{ size }, m_arr((T*)::operator new(m_capacity * sizeof(T)))
+template<typename T, typename Alloc>
+inline Vector<T, Alloc>::Vector(const Alloc& alloc) : m_size{ 0 }, m_capacity{ 0 }, Allocat{ alloc }, m_arr{ nullptr }
 {
-	for (int i = 0; i < m_size; i++)
+}
+
+template<typename T, typename Alloc>
+inline Vector<T, Alloc>::Vector(const size_t space, const Alloc& Allocator) : m_size{ 0 }, m_capacity{ space }, Allocat{ Allocator }
+{
+	_TryBegin
+
+		m_arr = Allocat.allocate(capacity());
+
+	_TryEnd
+	_CatchException
+
+		throw excep;
+
+	_CatchEnd
+	_CatchAll
+		
+		throw std::exception("Can't allocate memmory");
+
+	_CatchEnd
+}
+
+
+template<typename T, typename Alloc>
+template<typename Item>
+inline Vector<T, Alloc>::Vector(const Item begin, const Item end, const Alloc& Allocator) : m_size{ 0 }, m_capacity{ 0 }, Allocat { Allocator }
+{
+	
+	int l_size = static_cast<int>(std::distance(begin, end));
+	if (l_size <= 0)
 	{
-		new(&m_arr[i]) T(value);
+		m_size = 0;
+		m_capacity = 0;
+		m_arr = nullptr;
+
+		throw std::exception("Invalid range");
 	}
+	
+	_TryBegin
+		m_arr = Allocat.allocate(l_size);
+	_TryEnd
+	_CatchException
+		throw excep;
+	_CatchEnd
+	_CatchAll
+		throw std::exception("Can't allocate memory");
+	_CatchEnd
+	size_t i = 0;
+	_TryBegin
+		for (; i < size(); ++i)
+		{
+			new(m_arr + i) T(begin[i]);
+		}
+	_TryEnd
+	_CatchAll
+		for (; i > 0; --i)
+			m_arr[i].~T();
+		Allocat.deallocate(m_arr, l_size);
+		throw std::exception("Can't create array");
+
+	_CatchEnd
+
+	m_size = m_capacity = l_size;
 }
 
-template<typename T>
-inline Vector<T>::Vector(const Vector& other) : m_size{ other.m_size }, m_capacity{ other.m_capacity }, m_arr((T*)::operator new(m_capacity * sizeof(T)))
+
+
+template<typename T, typename Alloc>
+inline Vector<T,Alloc>::Vector(const size_t size, const ValueType value) : m_size{ 0 }, m_capacity{ 0 }
 {
-	for (size_t i = 0; i < m_size; i++)
-	{
-		new(&m_arr[i]) T(other.m_arr[i]);
-	}
+	_TryBegin
+		m_arr = Allocat.allocate(size);
+	_TryEnd
+	_CatchException
+		throw excep;
+	_CatchEnd
+	_CatchAll
+		throw std::exception("Can't allocate memory");
+	_CatchEnd
+
+	size_t i = 0;
+	_TryBegin
+		for (; i < size; ++i)
+		{
+			new(&m_arr[i]) T(value);
+		}
+	_TryEnd
+	_CatchAll
+		for (; i > 0; --i)
+			m_arr[i].~T();
+		Allocat.deallocate(m_arr, size);
+		
+		throw std::exception("Can't create array");
+	_CatchEnd
+
+	m_size = m_capacity = size;
 }
 
-template<typename T>
-inline Vector<T>::Vector(Vector&& other) : m_size{ other.m_size }, m_capacity{ other.m_capacity }, m_arr{ other.m_arr }//, m_arr((T*)::operator new(m_capacity * sizeof(T)))//
+template<typename T, typename Alloc>
+inline Vector<T,Alloc>::Vector(const Vector& other) : m_size{ 0 }, m_capacity{ 0 }
+{
+	size_t l_cap = other.capacity();
+	size_t l_size = other.size();
+	_TryBegin
+		m_arr = Allocat.allocate(l_cap);
+		
+	_TryEnd
+	_CatchException
+		throw excep;
+	_CatchEnd
+	_CatchAll
+		throw std::exception("Can't allocate memory");
+	_CatchEnd
+
+	size_t i = 0;
+	_TryBegin
+		for (; i < l_size; ++i)
+		{
+			new(m_arr + i) T(other.m_arr[i]);
+		}
+	_TryEnd
+	_CatchAll
+		for (; i > 0; --i)
+		{
+			m_arr[i].~T();
+		}
+		Allocat.deallocate(m_arr, l_cap);
+
+		throw std::exception("Can't create array");
+	_CatchEnd
+
+	m_size = l_size;
+	m_capacity = l_cap;
+}
+
+template<typename T, typename Alloc>
+inline Vector<T, Alloc>::Vector(Vector&& other) : m_size{ other.m_size }, m_capacity{ other.m_capacity }, m_arr{ other.m_arr }, Allocat{ std::move(other.Allocat) }
 {
 	other.m_arr = nullptr;
 	other.m_size = other.m_capacity = 0;
-	/*for (size_t i = 0; i < m_size; i++)
-	{
-		new(&m_arr[i]) T(std::move(other.m_arr[i]));
-	}
-	other.clear();*/
+	
 }
 
-template<typename T>
-Vector<T>::Vector(const std::initializer_list<T> listValues) : m_size{ listValues.size()}, m_capacity{listValues.size()},m_arr((T*)::operator new(m_capacity * sizeof(T)))
+template<typename T, typename Alloc>
+Vector<T, Alloc>::Vector(std::initializer_list<T> listValues, const Alloc& Allocator) : m_size{ 0 }, m_capacity{ 0 }, Allocat{ Allocator }
 {
-	int i = 0;
+	size_t l_cap = _ChangeGrowth(listValues.size());
+	_TryBegin
+		m_arr = Allocat.allocate(l_cap);
+	_TryEnd
+	_CatchException
+		throw excep;
+	_CatchEnd
+	_CatchAll
+		throw std::exception("Can't allocate memory");
+	_CatchEnd
+
+	size_t i = 0;
+	_TryBegin
 	for (auto& el : listValues)
 	{
-		new(&m_arr[i]) T(std::move(el));
-		i++;
+		new(m_arr + i) T(std::move(el));
+		++i;
 	}
+	_TryEnd
+	_CatchAll
+
+	for (;i > 0; --i)
+	{
+		m_arr[i].~T();
+	}
+	Allocat.deallocate(m_arr, l_cap);
+
+	throw std::exception("Can't create array");
+
+	_CatchEnd
+
+	m_size = m_capacity = l_cap;
 }
 
-template<typename T>
-inline Vector<T>::~Vector()
+template<typename T, typename Alloc>
+inline Vector<T,Alloc>::~Vector()
 {
 	clear();
-	::operator delete(m_arr, m_capacity * sizeof(T));
+	Allocat.deallocate(m_arr, capacity());
 }
 
-template<typename T>
-inline void Vector<T>::push_back(ValueType&& value)
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::push_back(ValueType&& value)
 {
 	emplace_back(std::move(value));
 }
 
-template<typename T>
-inline void Vector<T>::push_back(const ValueType& value)
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::push_back(const ValueType& value)
 {
 	emplace_back(value);
 }
 
-template<typename T>
-inline void Vector<T>::pop_back()
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::pop_back()
 {
-	if (!empty())
+#ifdef _DEBUG
+	if (empty())
 	{
-		this->m_size--;
-		this->m_arr[m_size].~T();
+		throw std::exception("Array empty before pop_back()");
 	}
+#endif // _DEBUG	
+	
+	this->m_size--;
+	this->m_arr[m_size].~T();
+	
 }
 
-template<typename T>
-inline size_t Vector<T>::size()
+
+template<typename T, typename Alloc>
+template<typename Item>
+inline void Vector<T, Alloc>::assign(const Item begin, const Item end)
+{
+	int l_size = static_cast<int>(std::distance(begin, end));
+	if (l_size <= 0)
+	{
+		m_size = 0;
+		m_capacity = 0;
+		m_arr = nullptr;
+
+		throw std::exception("Invalid range");
+	}
+
+	if (capacity() < l_size)
+	{
+		PointType NewArr = nullptr;
+
+		_TryBegin
+			NewArr = Allocat.allocate(l_size);
+		_TryEnd
+		_CatchException
+			throw excep;
+		_CatchEnd
+		_CatchAll
+			throw std::exception("Can't allocate memory");
+		_CatchEnd
+
+		size_t i = 0;
+		_TryBegin
+			for (; i < l_size; ++i)
+				new(NewArr + i) T(begin[i]);
+			
+		_TryEnd
+		_CatchAll
+			for (; i > 0; --i)
+				NewArr[i].~T();
+			
+			Allocat.deallocate(NewArr, l_size);
+			throw std::exception("Something went wrong while recreating the array");
+		_CatchEnd
+
+		clear();
+		Allocat.deallocate(m_arr, capacity());
+
+		m_arr = NewArr;
+		m_size = m_capacity = l_size;
+		return;
+	}
+
+	size_t i = 0;
+	_TryBegin
+		if (size() <= l_size)
+		{
+			for (; i < l_size; ++i)
+			{
+				new(m_arr + i) T(begin[i]);
+			}
+		}
+		else
+		{
+			for (; i < l_size; ++i)
+			{
+				m_arr[i] = begin[i];
+			}
+		}
+		m_size = l_size;
+	_TryEnd
+	_CatchAll
+		for (; i > size(); --i)
+		{
+			m_arr[i].~T();
+		}
+		std::exception("Something went wrong while assigning an array, old data is lost");
+	_CatchEnd
+}
+
+
+
+
+template<typename T, typename Alloc>
+inline void Vector<T, Alloc>::assign(const std::initializer_list<T> listValue)
+{
+	size_t ListSize = listValue.size();
+	if (ListSize > capacity())
+	{
+		PointType NewArr = nullptr;
+
+		_TryBegin
+			NewArr = Allocat.allocate(ListSize);
+		_TryEnd
+			_CatchException
+			throw excep;
+		_CatchEnd
+		_CatchAll
+			throw std::exception("Can't allocate memory");
+		_CatchEnd
+
+		_TryBegin
+
+			std::uninitialized_copy(listValue.begin(), listValue.end(), NewArr);
+
+		_TryEnd
+		_CatchAll
+
+			Allocat.deallocate(NewArr, ListSize);
+			throw std::exception("Something went wrong while recreating the array");
+
+		_CatchEnd
+
+		clear();
+		Allocat.deallocate(m_arr, capacity());
+
+		m_arr = NewArr;
+		m_size = m_capacity = ListSize;
+
+		return;
+	}
+
+	_TryBegin
+	if (size() <= ListSize)
+	{
+		for (size_t i = 0; i < ListSize; ++i)
+			new(m_arr + i) T(*(listValue.begin() + i));		
+	}
+	else
+	{
+		size_t i = 0;
+		
+		for (; i < ListSize; ++i)
+		{
+			m_arr[i] = *(listValue.begin() + i);
+		}
+		for (; i < size(); ++i)
+		{
+			m_arr[i].~T();
+		}
+	}
+	m_size = ListSize;
+	_TryEnd
+	_CatchAll
+
+		throw std::exception("Something went wrong while assigning an array, old data is lost");
+
+	_CatchEnd
+}
+
+template<typename T, typename Alloc>
+inline void Vector<T, Alloc>::assign(size_t Newsize, const T& value)
+{
+	if (Newsize > capacity())
+	{
+		PointType Newarr = nullptr;
+		_TryBegin
+
+		Newarr = Allocat.allocate(Newsize);
+
+		_TryEnd
+		_CatchException
+
+		throw excep;
+
+		_CatchEnd
+		_CatchAll
+
+		throw std::exception("Can't allocate memory");
+
+		_CatchEnd
+
+		size_t i = 0;
+		_TryBegin
+		for (; i < Newsize; ++i)
+		{
+			new(Newarr + i) T(value);
+		}
+		_TryEnd
+		_CatchAll
+			for (; i > 0; --i)
+				Newarr[i].~T();
+			
+			Allocat.deallocate(Newarr, Newsize);
+			throw std::exception("Something went wrong while recreating the array");
+		_CatchEnd
+
+		clear();
+		Allocat.deallocate(m_arr, capacity());
+
+		m_arr = Newarr;
+		m_size = m_capacity = Newsize;
+
+		return;
+	}
+	
+	_TryBegin
+	if (size() < Newsize)
+	{
+		m_size = Newsize;
+		for (size_t i = 0; i < size(); ++i)
+			new(m_arr + i) T(value);
+	}
+	else
+	{
+
+		size_t i = 0;
+		for (; i < Newsize; ++i)
+		{
+			m_arr[i] = value;
+		}
+		for (;i < size(); ++i)
+		{
+			m_arr[i].~T();
+		}
+		m_size = Newsize;
+	}
+	_TryEnd
+	_CatchAll
+		throw std::exception("Something went wrong while assigning an array, old data is lost");
+	_CatchEnd
+}
+
+template<typename T, typename Alloc>
+inline size_t Vector<T,Alloc>::size()
 {
 	return this->m_size;
 }
 
-template<typename T>
-inline const size_t Vector<T>::size() const
+template<typename T, typename Alloc>
+inline const size_t Vector<T,Alloc>::size() const
 {
 	return this->m_size;
 }
 
-template<typename T>
-inline size_t Vector<T>::capacity()
+template<typename T, typename Alloc>
+inline size_t Vector<T,Alloc>::capacity()
 {
 	return this->m_capacity;
 }
 
-template<typename T>
-inline const size_t Vector<T>::capacity() const
+template<typename T, typename Alloc>
+inline const size_t Vector<T,Alloc>::capacity() const
 {
 	return this->m_capacity;
 }
 
-template<typename T>
-inline bool Vector<T>::empty()
+template<typename T, typename Alloc>
+inline bool Vector<T,Alloc>::empty()
 {
-	return this->m_size == 0;
+	return size() == 0;
 }
 
-template<typename T>
-inline bool Vector<T>::empty() const
+template<typename T, typename Alloc>
+inline bool Vector<T,Alloc>::empty() const
 {
-	return this->m_size == 0;
+	return size() == 0;
 }
 
-template<typename T>
-inline bool Vector<T>::IsValidIndex(size_t index)
+template<typename T, typename Alloc>
+inline bool Vector<T,Alloc>::IsValidIndex(size_t index)
 {
-	return index < m_size;
+	return index < size();
 }
 
-template<typename T>
-inline void Vector<T>::clear()
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::clear()
 {
-	for (size_t i = 0; i < m_size; i++)
+	for (size_t i = 0; i < size(); ++i)
 	{
 		m_arr[i].~T();
 	}
 	this->m_size = 0;
 }
 
-template<typename T>
-inline void Vector<T>::reserve(size_t space)
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::reserve(size_t space)
 {
-	if (space <= this->m_capacity ) return;
+	if (space <= capacity()) return;
+	
+	PointType newArr;
+	_TryBegin
 
-	PointType newArr = (T*)::operator new(space * sizeof(T));
-	
-	for (size_t i = 0; i < m_size; i++)
-		::new(newArr + i) T(std::move(m_arr[i]));
-	
-	for (size_t i = 0; i < m_size; i++)
+		newArr = Allocat.allocate(space);
+
+	_TryEnd
+	_CatchException
+
+		throw excep;
+
+	_CatchEnd
+	_CatchAll
+
+		throw std::exception("Can't allocate memory");
+
+	_CatchEnd
+
+
+	_TryBegin
+
+		if constexpr (std::is_nothrow_move_constructible_v<T> || !std::is_copy_constructible_v<T>)
+			std::uninitialized_move(m_arr,m_arr + m_size, newArr);
+		else
+			std::uninitialized_copy(m_arr, m_arr + m_size, newArr);
+
+	_TryEnd
+	_CatchAll
+
+		Allocat.deallocate(newArr, space);
+		throw std::exception("Something went wrong while recreating the array");
+
+	_CatchEnd
+
+	for (size_t i = 0; i < size(); ++i)
 		m_arr[i].~T();
-	::operator delete(m_arr, m_capacity * sizeof(T));
+	Allocat.deallocate(m_arr, capacity());
 
 	this->m_arr = newArr;
 	this->m_capacity = space;
 }
 
-template<typename T>
-inline size_t Vector<T>::insert(size_t index, const ValueType& value)
+template<typename T, typename Alloc>
+inline size_t Vector<T,Alloc>::insert(size_t index, const ValueType& value)
 {
 	return emplace(index, value);
 }
 
-template<typename T>
-inline size_t Vector<T>::insert(size_t index, ValueType&& value)
+template<typename T, typename Alloc>
+inline size_t Vector<T,Alloc>::insert(size_t index, ValueType&& value)
 {
 	return emplace(index, std::move(value));
 }
 
-template<typename T>
-inline void Vector<T>::erase(const size_t index)
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::erase(const size_t index)
 {
 #ifdef _DEBUG
 	if (index >= m_size)
@@ -456,172 +799,191 @@ inline void Vector<T>::erase(const size_t index)
 #endif
 	if (empty())
 		return;
-	if (index == m_size - 1)
-	{
+	if (index == size() - 1)
 		return pop_back();
-	}
+	
 
-	m_size--;
-	for (size_t i = index; i < m_size; i++)
+	--m_size;
+	for (size_t i = index; i < size(); ++i)
 	{
 		m_arr[i] = m_arr[i + 1];
 	}
 	m_arr[m_size].~T();
 }
 
-template<typename T>
-inline void Vector<T>::resize(const size_t Newsize)
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::resize(const size_t Newsize)
 {
-	if (Newsize == m_size)
-		return;
-	if (Newsize > m_size)
-	{
-		reserve(Newsize);
-		for (size_t i = m_size; i < Newsize; i++)
-		{
-			new(m_arr + i) T();
-		}
-	}
-	else
-	{
-		for (size_t i = Newsize; i < m_size; i++)
-		{
+	resize(Newsize, T());
+}
+
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::resize(const size_t Newsize, const T& val)
+{
+	_TryBegin
+		reserve(_ChangeGrowth(m_capacity + 1));
+	_TryEnd
+	_CatchException
+		throw excep;
+	_CatchEnd
+
+	size_t i = size();
+	_TryBegin
+
+		for (; i < Newsize; ++i)
+			new(m_arr + i) T(val);
+		
+	_CatchEnd
+	_CatchAll
+		for (; i >= size(); --i)
 			m_arr[i].~T();
-		}
-	}
-	m_size = Newsize;
-}
-
-template<typename T>
-inline void Vector<T>::resize(const size_t Newsize, const ReferenceType val)
-{
-	if (Newsize > m_size)
-	{
-		reserve(Newsize);
-		for (size_t i = m_size; i < Newsize; i++)
-		{
-			new(m_arr + i) T(std::move(val));
-		}
-	}
-	else
-	{
-		for (size_t i = Newsize; i < m_capacity; i++)
-		{
-			m_arr[i] = ~T();
-		}
-	}
-	m_size = Newsize;
-}
-
-template<typename T>
-inline T& Vector<T>::at(const size_t index) 
-{
-	if (index >= m_size)
-	{
-		throw std::exception("Invalid array element");
-	}
-	return m_arr[index];
-}
-
-template<typename T>
-inline const T& Vector<T>::at(const size_t index) const
-{
-	if (index >= m_size)
-	{
-		throw std::exception("Invalid array element");
-	}
-	return m_arr[index];
-}
-
-template<typename T>
-inline typename Vector<T>::Iterator Vector<T>::begin()
-{
-	Vector<T>::Iterator it(m_arr);
-	return it;
-}
-
-template<typename T>
-inline typename Vector<T>::const_Iterator Vector<T>::begin() const
-{
-	Vector<T>::const_Iterator it(m_arr);
-	return it;
-}
-
-template<typename T>
-inline typename Vector<T>::const_Iterator Vector<T>::cbegin() const
-{
-	Vector<T>::const_Iterator it(m_arr);
-	return it;
-}
-
-template<typename T>
-inline typename Vector<T>::Iterator Vector<T>::end()
-{
-	Vector<T>::Iterator it(m_arr + m_size);
-	return it;
-}
-
-template<typename T>
-inline typename Vector<T>::const_Iterator Vector<T>::end() const
-{
-	Vector<T>::const_Iterator it(m_arr + m_size);
-	return it;
-}
-
-template<typename T>
-inline typename Vector<T>::const_Iterator Vector<T>::cend() const
-{
-	Vector<T>::const_Iterator it(m_arr + m_size);
-	return it;
-}
-
-template<typename T>
-inline void Vector<T>::shrink_to_fit()
-{
-	if (m_capacity == m_size) return;
-
-	PointType Newspace = (T*)::operator new(m_size * sizeof(T));
-
-	for (size_t i = 0; i < m_size; i++)
-		Newspace[i] = std::move(m_arr[i]);
+		
+		throw std::exception("Something went wrong while resize the array");
+	_CatchEnd
 	
-	for (size_t i = 0; i < m_size; i++)
+	for (size_t i = Newsize; i < size(); ++i)
+	{
 		m_arr[i].~T();
-	::operator delete(m_arr,m_capacity * sizeof(T));
+	}
+	m_size = Newsize;
+}
+
+template<typename T, typename Alloc>
+inline T& Vector<T,Alloc>::at(const size_t index) 
+{
+	if (index >= m_size)
+	{
+		throw std::exception("Invalid array element");
+	}
+	return m_arr[index];
+}
+
+template<typename T, typename Alloc>
+inline const T& Vector<T,Alloc>::at(const size_t index) const
+{
+	if (index >= m_size)
+	{
+		throw std::exception("Invalid array element");
+	}
+	return m_arr[index];
+}
+
+template<typename T, typename Alloc>
+inline typename Vector<T,Alloc>::Iterator Vector<T,Alloc>::begin()
+{
+	Vector<T,Alloc>::Iterator it(m_arr);
+	return it;
+}
+
+template<typename T, typename Alloc>
+inline typename Vector<T,Alloc>::const_Iterator Vector<T,Alloc>::begin() const
+{
+	Vector<T,Alloc>::const_Iterator it(m_arr);
+	return it;
+}
+
+template<typename T, typename Alloc>
+inline typename Vector<T,Alloc>::const_Iterator Vector<T,Alloc>::cbegin() const
+{
+	Vector<T,Alloc>::const_Iterator it(m_arr);
+	return it;
+}
+
+template<typename T, typename Alloc>
+inline typename Vector<T,Alloc>::Iterator Vector<T,Alloc>::end()
+{
+	Vector<T,Alloc>::Iterator it(m_arr + size());
+	return it;
+}
+
+template<typename T, typename Alloc>
+inline typename Vector<T,Alloc>::const_Iterator Vector<T,Alloc>::end() const
+{
+	Vector<T,Alloc>::const_Iterator it(m_arr + size());
+	return it;
+}
+
+template<typename T, typename Alloc>
+inline typename Vector<T,Alloc>::const_Iterator Vector<T,Alloc>::cend() const
+{
+	Vector<T,Alloc>::const_Iterator it(m_arr + size());
+	return it;
+}
+
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::shrink_to_fit()
+{
+	if (capacity() == size()) return;
+
+	PointType Newspace;
+	_TryBegin
+
+		Newspace = Allocat.allocate(size());
+
+	_TryEnd 
+	_CatchException
+	
+		throw excep;
+
+	_CatchEnd
+	_CatchAll
+
+		throw std::exception("Can't allocate memory");
+
+	_CatchEnd
+	
+
+	_TryBegin
+
+		if (std::is_nothrow_move_constructible_v<T> || !std::is_copy_constructible_v<T>)
+			std::uninitialized_move(m_arr, m_arr + size(), Newspace);
+		else
+			std::uninitialized_copy(m_arr, m_arr + size(), Newspace);	
+	_TryEnd
+	_CatchAll
+
+		Allocat.deallocate(Newspace, size());
+		throw std::exception("Something went wrong while recreating the array");
+
+	_CatchEnd
+
+	for (size_t i = 0; i < size(); ++i)
+		m_arr[i].~T();
+	Allocat.deallocate(m_arr,capacity());
 
 	m_arr = Newspace;
-	m_capacity = m_size;
+	m_capacity = size();
 }
 
-template<typename T>
-inline T& Vector<T>::front() const
+template<typename T, typename Alloc>
+inline T& Vector<T,Alloc>::front() const
 {
 #ifdef _DEBUG
 	if (empty())
 	{
-		abort();
+		throw std::exception("front() called on empty array");
 	}
 #endif // _DEBUG
 	return m_arr[0];
 }
 
-template<typename T>
-inline T& Vector<T>::back() const
+template<typename T, typename Alloc>
+inline T& Vector<T,Alloc>::back() const
 {
 #ifdef _DEBUG
 	if (empty())
 	{
-		abort();
+		throw std::exception("back() called on empty array");
 	}
 #endif // _DEBUG
 
-	return m_arr[m_size - 1];
+	return m_arr[size() - 1];
 }
 
-template<typename T>
-inline void Vector<T>::swap(Vector<T>& other)
+template<typename T, typename Alloc>
+inline void Vector<T,Alloc>::swap(Vector& other)
 {
-	T* l_bufferArr = std::move(m_arr);
+	T* l_bufferArr = m_arr;
 	size_t l_bufferCap = m_capacity;
 	size_t l_bufferSize = m_size;
 	
@@ -634,96 +996,70 @@ inline void Vector<T>::swap(Vector<T>& other)
 	other.m_size = l_bufferSize;
 }
 
-template<typename T>
-inline T* Vector<T>::data()
+template<typename T, typename Alloc>
+inline T* Vector<T,Alloc>::data()
 {
 	return m_arr;
 }
 
-template<typename T>
-inline const T* Vector<T>::data() const
+template<typename T, typename Alloc>
+inline const T* Vector<T,Alloc>::data() const
 {
 	return m_arr;
 }
 
-template<typename T>
-inline T& Vector<T>::operator[](const size_t el)
+template<typename T, typename Alloc>
+inline T& Vector<T,Alloc>::operator[](const size_t el)
 {
 #ifdef _DEBUG
 	if (el >= m_size)
 	{
-		abort();
+		throw std::exception("Subscript out of range");
 	}
 #endif // _DEBUG
 
 	return this->m_arr[el];
 }
 
-template<typename T>
-inline const T& Vector<T>::operator[](const size_t el) const
+template<typename T, typename Alloc>
+inline const T& Vector<T,Alloc>::operator[](const size_t el) const
 {
 #ifdef _DEBUG
 	if (el >= m_size)
 	{
-		abort();
+		throw std::exception("Subscript out of range");
 	}
 #endif // _DEBUG
 	return this->m_arr[el];
 }
 
-template<typename T>
-inline Vector<T>& Vector<T>::operator=(const Vector<T>& other)
+template<typename T, typename Alloc>
+inline Vector<T,Alloc>& Vector<T,Alloc>::operator=(const Vector& other)
 {
-	if (*this == other)
+	if (this == std::addressof(other))
 		return *this;
 
-	if (m_capacity < other.m_size)
-	{
-		clear();
-		::operator delete(m_arr, m_capacity * sizeof(T));
-
-		m_capacity = other.m_capacity;
-		m_arr = (T*)::operator new(m_capacity * sizeof(T));
-	}
-	this->m_size = other.m_size;
-
-	for (size_t i = 0; i < m_size; i++)
-	{
-		m_arr[i] = other.m_arr[i];
-	}
+	assign(other.m_arr, other.m_arr + other.size());
 
 	return *this;
 }
 
-template<typename T>
-inline Vector<T>& Vector<T>::operator=(const std::initializer_list<T> listValue)
+template<typename T, typename Alloc>
+inline Vector<T,Alloc>& Vector<T,Alloc>::operator=(const std::initializer_list<T> listValue)
 {
-	if (listValue.size() > m_capacity)
-	{
-		clear();
-		::operator delete(m_arr, m_capacity * sizeof(T));
-		m_capacity = listValue.size();
-		m_arr = (T*)::operator new(m_capacity * sizeof(T));
-	}
-	m_size = listValue.size();
-
-	size_t i = 0;
-	for (auto& el : listValue)
-	{
-		new(&m_arr[i]) T(std::move(el));
-		i++;
-	}
+	assign(listValue);
 
 	return *this;
 }
 
-template<typename T>
-inline Vector<T>& Vector<T>::operator=(Vector<T>&& other) noexcept
+template<typename T, typename Alloc>
+inline Vector<T,Alloc>& Vector<T,Alloc>::operator=(Vector&& other) noexcept
 {
-	if (*this == other)
+	if (this == std::addressof(other))
 		return *this;
+
 	clear();
-	::operator delete(m_arr, m_capacity * sizeof(T));
+	Allocat.deallocate(m_arr, m_capacity);
 
 	m_arr = other.m_arr;
 	m_capacity = other.m_capacity;
@@ -735,15 +1071,15 @@ inline Vector<T>& Vector<T>::operator=(Vector<T>&& other) noexcept
 	return *this;
 }
 
-template<typename T>
-inline bool Vector<T>::operator==(const Vector<T>& other) 
+template<typename T, typename Alloc>
+inline bool Vector<T,Alloc>::operator==(const Vector& other) 
 {
 	if (this->m_size != other.m_size)
 	{
 		return false;
 	}
 
-	for (size_t i = 0; i < m_size; i++)
+	for (size_t i = 0; i < m_size; ++i)
 	{
 		if (m_arr[i] != other.m_arr[i])
 		{
@@ -753,40 +1089,56 @@ inline bool Vector<T>::operator==(const Vector<T>& other)
 	return true;
 }
 
-template<typename T>
-inline bool Vector<T>::operator==(const Vector<T>& other) const
+template<typename T, typename Alloc>
+inline bool Vector<T,Alloc>::operator==(const Vector& other) const
 {
 	return this->operator==(other);
 }
 
-template<typename T>
-inline bool Vector<T>::operator!=(const Vector<T>& other)
+template<typename T, typename Alloc>
+inline bool Vector<T,Alloc>::operator!=(const Vector& other)
 {
 	return !(this->operator==(other));
 }
 
-template<typename T>
-inline bool Vector<T>::operator!=(const Vector<T>& other) const
+template<typename T, typename Alloc>
+inline bool Vector<T,Alloc>::operator!=(const Vector& other) const
 {
 	return !(this->operator==(other));
 }
 
-template<typename T>
+
+template<typename T, typename Alloc>
 template<class ...Args>
-inline T& Vector<T>::emplace_back(Args&& ...args)
+inline T& Vector<T,Alloc>::emplace_back(Args&& ...args)
 {
-	if (m_size >= m_capacity)
-	{
-		reserve((++m_capacity * 1.5));
-	}
-	::new(&m_arr[m_size]) T(std::forward<Args>(args)...);
+	_TryBegin
 
+		if (m_size >= m_capacity)
+		{
+
+			reserve(_ChangeGrowth(m_capacity + 1));
+		}
+		new(m_arr + m_size) T(std::forward<Args>(args)...);
+
+	_TryEnd 
+	_CatchException
+
+		throw excep;
+
+	_CatchEnd
+	_CatchAll
+
+		throw std::exception("Something went wrong while inserting an element into an array");
+
+	_CatchEnd
+	
 	return m_arr[m_size++];
 }
 
-template<typename T>
+template<typename T, typename Alloc>
 template<class ...Args>
-inline size_t Vector<T>::emplace(const size_t index, Args&&... val)
+inline size_t Vector<T,Alloc>::emplace(const size_t index, Args&&... val)
 {
 #ifdef _DEBUG
 	if (index > m_size)
@@ -795,24 +1147,46 @@ inline size_t Vector<T>::emplace(const size_t index, Args&&... val)
 	}
 #endif // DEBUG
 
-	if (index == m_size)
-	{
-		emplace_back(std::move(val)...);
-	}
-	if (m_size >= m_capacity)
-	{
-		reserve((++m_capacity * 1.5));		
-	}
-	
-	::new(&m_arr[m_size]) T(std::forward<T>(m_arr[m_size - 1])); // Memory allocation for new element
+	_TryBegin
+		if (index == size())
+		{
+			emplace_back(std::move(val)...);
+			return index;
+		}
+		if (size() >= capacity())
+			reserve(_ChangeGrowth(m_capacity + 1));
 
-	for (size_t i = m_size - 1; i > index; i--)
-	{
-		m_arr[i] = std::move(m_arr[i - 1]);
-	}
+	_TryEnd 
+	_CatchException
+	
+		throw excep;
+
+	_CatchEnd
+
+	_TryBegin
+		new(m_arr + size()) T(std::forward<T>(m_arr[size() - 1])); // Construct element for offset
+
+		if (std::is_nothrow_move_constructible_v<T> || !std::is_copy_constructible_v<T>)
+		{
+			for (size_t i = m_size - 1; i > index; --i)
+				m_arr[i] = std::move(m_arr[i - 1]);
+			
+			m_arr[index] = T(std::move(val)...);
+		}
+		else
+		{
+			for (size_t i = m_size - 1; i > index; --i)
+				m_arr[i] = m_arr[i - 1];
+
+			m_arr[index] = T(val...);
+		}
+	_TryEnd
+	_CatchAll
+
+		throw std::exception("Something went wrong while inserting an element into an array");
+
+	_CatchEnd
+
 	++m_size;
-	m_arr[index] = T(std::move(val)...);
-	
-
 	return index;
 }
